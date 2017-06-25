@@ -1,0 +1,156 @@
+install.packages("readr")
+library(readr)
+
+setwd("E:")
+train<-read_csv("train.csv")
+test<-read_csv("test.csv")
+head(data)
+
+test$registered=0
+test$casual=0
+test$count=0
+data<-rbind(train,test)
+
+install.packages("lubridate")
+library(lubridate)
+install.packages("randomForest")
+library(randomForest)
+install.packages("rpart")
+install.packages("rpart.plot")
+library(rpart)
+library(rpart.plot)
+
+#data$hour1<-hour(data$datetime)
+data$hour1<-substr(data$datetime,12,13)
+table(data$hour1)
+
+data$hour1<-as.integer(data$hour1)
+train<-data[as.integer(day(data$datetime))<20,]
+boxplot(train$count~train$hour1,xlab="hour",ylab="count")
+
+boxplot(train$registered~train$hour1,xlab="hour",ylab="registered count")
+boxplot(train$casual~train$hour1,xlab="hour",ylab="casual count")
+
+data$day<-weekdays(as.Date(data$datetime))
+table(data$day)
+data$year<-year(as.Date(data$datetime))
+data$month<-month(as.Date(data$datetime))
+
+train<-data[as.integer(day(data$datetime))<20,]
+boxplot(train$count~train$day,xlab="day",ylab="count")
+boxplot(train$registered~train$day,xlab="day",ylab="registered count")
+boxplot(train$casual~train$day,xlab="day",ylab="casual count")
+
+train<-data[as.integer(day(data$datetime))<20,]
+boxplot(train$count~train$weather,xlab="year",ylab="count")
+boxplot(train$registered~train$day,xlab="weather",ylab="registered count")
+boxplot(train$casual~train$day,xlab="weather",ylab="casual count")
+
+cor_data<-data.frame(train$temp,train$atemp,train$humidity,train$windspeed,train$casual,train$registered)
+cor(cor_data)
+
+data$year<-year(data$datetime)
+train<-data[as.integer(day(data$datetime))<20,]
+boxplot(train$count~train$year,xlab="year",ylab="count")
+
+########
+
+train$hour1<-as.integer(train$hour1)
+d<-rpart(registered~hour1,data=train)
+rpart.plot(d)
+
+train$hour1<-as.integer(train$hour1)
+data$dp_reg=0
+data$dp_reg[data$hour1<7.5]=1
+data$dp_reg[data$hour1>=22]=2
+data$dp_reg[data$hour1>=9.5 & data$hour1<18]=3
+data$dp_reg[data$hour1>=7.5 & data$hour1<18]=4
+data$dp_reg[data$hour1>=8.5 & data$hour1<18]=5
+data$dp_reg[data$hour1>=20 & data$hour1<20]=6
+data$dp_reg[data$hour1>=18 & data$hour1<20]=7
+
+data$dp_cas=0
+f=rpart(casual~hour1,data=train)
+rpart.plot(f)
+
+data$dp_cas[data$hour1<7.5]=1
+data$dp_cas[data$hour1>=20]=2
+data$dp_cas[data$hour1>7.5 & data$hour1<9.5]=3
+data$dp_cas[data$hour1>=9.5 & data$hour1<20]=4
+
+g<-rpart(registered~temp,data=train)
+rpart.plot(g)
+
+data$temp_reg=0
+data$temp_reg[data$temp<13]=1
+data$temp_reg[data$temp>=30]=2
+data$temp_reg[data$temp>=13 & data$temp<23]=3
+data$temp_reg[data$temp>=23 & data$temp<30]=4
+
+data$temp_cas=0
+h<-rpart(casual~temp,data=train)
+rpart.plot(h)
+
+data$temp_cas=0
+data$temp_cas[data$temp<15]=1
+data$temp_cas[data$temp>=30]=2
+data$temp_cas[data$temp>=15 & data$temp<23] = 3
+data$temp_cas[data$temp>=23 & data$temp<30] = 4
+
+data$year_part=0
+data$month<-month(data$datetime)
+data$year_part[data$year=='2011']=1
+data$year_part[data$year=='2011' & data$month>3]=2
+data$year_part[data$year=='2011' & data$month>6]=3
+data$year_part[data$year=='2011' & data$month>9]=4
+data$year_part[data$year=='2012']=5
+data$year_part[data$year=='2012' & data$month>3]=6
+data$year_part[data$year=='2012' & data$month>6]=7
+data$year_part[data$year=='2012' & data$month>9]=8
+
+table(data$year_part)
+
+data$day_type=""
+data$day_type[data$holiday==0 & data$workingday==0]="weekend"
+data$day_type[data$holiday==1]="holiday"
+data$day_type[data$holiday==0 & data$workingday==1]="working day"
+data$weekend=0
+data$weekend[data$day=="Sunday"|data$day=="Saturday"]=1
+
+#####randomForest####
+
+#train<-data[as.integer(day(data$datetime))>20,]
+train<-data
+
+set.seed(421)
+train$logreg<-log(train$registered+1)
+train$logcas<-log(train$casual+1)
+
+#fit1<-randomForest(logreg~hour1+workingday+day+holiday+day_type+
+                   temp_reg+humidity+atemp+windspeed+season+weather
+                   +dp_reg+weekend+year+year_part,
+                   train,importance=TRUE,ntree=250)
+
+fit1<-randomForest(logreg~hour1+workingday+holiday+temp_reg+atemp+humidity
+                    +windspeed+season+weather+weekend+year+year_part
+                    +dp_reg,train,importance=TRUE,ntree=500)
+
+pred1<-predict(fit1,train)
+train$logreg<-pred1
+
+set.seed(421)
+fit2<-randomForest(logcas~hour1+workingday+holiday+temp_cas+atemp+humidity
+                   +windspeed+season+weather+weekend+year+year_part
+                   +dp_cas,train,importance=TRUE,ntree=500)
+
+pred2<-predict(fit2,train)
+train$logcas<-pred2
+
+train$registered<-exp(train$logreg)-1
+train$casual<-exp(train$logcas)-1
+train$count<-train$casual+train$registered
+
+train2<-train[as.integer(day(data$datetime))>=20,]
+
+submit_final<-data.frame(datetime=train2$datetime,count=train2$count)
+write.csv(submit_final,"submit_final.csv",row.names=F)

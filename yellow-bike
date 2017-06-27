@@ -64,9 +64,9 @@ data$dp_reg=0
 data$dp_reg[data$hour1<7.5]=1
 data$dp_reg[data$hour1>=22]=2
 data$dp_reg[data$hour1>=9.5 & data$hour1<18]=3
-data$dp_reg[data$hour1>=7.5 & data$hour1<18]=4
-data$dp_reg[data$hour1>=8.5 & data$hour1<18]=5
-data$dp_reg[data$hour1>=20 & data$hour1<20]=6
+data$dp_reg[data$hour1>=7.5 & data$hour1<8.5]=4
+data$dp_reg[data$hour1>=8.5 & data$hour1<9.5]=5
+data$dp_reg[data$hour1>=20 & data$hour1<22]=6
 data$dp_reg[data$hour1>=18 & data$hour1<20]=7
 
 data$dp_cas=0

@@ -1,0 +1,64 @@
+#https://www.kaggle.com/venkatvurimalla/simple-boosted-regression
+
+install.packages("gbm")
+
+library(readr)
+library(gbm)
+
+setwd("E:")
+train_2016<-read_csv("train_2016_v2.csv")
+properties_2016<-read_csv("properties_2016.csv")
+sample_submission<-read.csv("sample_submission.csv")
+
+
+head(train_2016)
+head(properties_2016)
+
+train<-merge.data.frame(train_2016,properties_2016,by="parcelid")
+
+summary(properties_2016$parcelid == sample_submission$ParcelId)
+rm(sample_submission)
+
+train.fullvalues<-train[,c(1,2,3,25,35,37,52,58)]
+str(train.fullvalues)
+
+train.fullvalues$transactiondate<-as.Date(train.fullvalues$transactiondate,format="%m%d%Y")
+train$transactiondate<-as.Date(train$transactiondate,format="%m%d%Y")
+
+train$transactiondate<-as.factor(train$transactiondate)
+gbm.out<-gbm(logerror ~ .-(taxdelinquencyflag+rawcensustractandblock+typeconstructiontypeid+fireplaceflag
+                          +propertycountylandusecode+hashottuborspa+fips+architecturalstyletypeid
+                          +propertyzoningdesc+buildingclasstypeid+decktypeid+poolcnt+pooltypeid10
+                         +pooltypeid2+pooltypeid7+storytypeid+assessmentyear),
+                         distribution="gaussian",interaction.depth=3,n.trees=1000,shrinkage=0.001,data=train)
+train.pred<-predict.gbm(gbm.out,n.trees=1000)
+mean((train.pred-train$logerror)^2)
+
+properties_2016$transactiondate<-"10/1/2016"
+oct2016<-predict.gbm(gbm.out,newdata=properties_2016,n.trees=1000)
+summary(is.na(oct2016))
+
+properties_2016$transactiondate<-"11/1/2016"
+nov2016<-predict.gbm(gbm.out,newdata=properties_2016,n.trees=1000)
+
+properties_2016$transactiondate<-"12/1/2016"
+dec2016<-predict.gbm(gbm.out,newdata=properties_2016,n.trees=1000)
+
+properties_2016$transactiondate<-"10/1/2017"
+oct2017<-predict.gbm(gbm.out,newdata=properties_2016,n.trees=1000)
+
+properties_2016$transactiondate<-"11/1/2017"
+nov2017<-predict.gbm(gbm.out,newdata=properties_2016,n.trees=1000)
+
+properties_2016$transactiondate<-"12/1/2017"
+dec2017<-predict.gbm(gbm.out,newdata=properties_2016,n.trees=1000)
+
+submission<-data.frame("ParcelId"=as.integer(properties_2016$parcelid),"201610"=oct2016,
+         "201611"=nov2016,"201612"=dec2016,"201710"=oct2017,"201711"=nov2017,"201617"=dec2017)
+
+str(submission)
+submission$ParcelId<-as.integer(submission$ParcelId)
+write.csv(submission,file="submission.csv",row.names=FALSE)
+
+#colnames(submission1)<-c("ParcelId","201610","201611","201612","201710","201711","201712")
+#write.csv(submission1, file = "submission1-1.csv", row.names = FALSE )

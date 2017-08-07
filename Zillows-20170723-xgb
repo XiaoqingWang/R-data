@@ -1,0 +1,135 @@
+#https://www.kaggle.com/venkatvurimalla/simple-boosted-regression
+
+library(readr)
+library(gbm)
+library(xgboost)
+library(corrplot)
+library(lubridate)
+
+setwd("E:")
+train_2016<-read_csv("train_2016_v2.csv")
+properties_2016<-read_csv("properties_2016.csv")
+
+train<-merge.data.frame(train_2016,properties_2016,by="parcelid")
+
+res<-sapply(train,function(x) sum(is.na(x)))
+miss<-sort(res,decreasing=T)
+miss
+
+train_left<-train[,names(train)!=c('typeconstructiontypeid','finishedsquarefeet6','decktypeid',
+                                              'poolsizesum', 'taxdelinquencyflag')] 
+
+train_left<-train_left[,names(train_left)!=c('buildingclasstypeid')] 
+train_left<-train_left[,names(train_left)!=c('storytypeid')] 
+train_left<-train_left[,names(train_left)!=c('finishedsquarefeet13')] 
+train_left<-train_left[,names(train_left)!=c('yardbuildingsqft26')] 
+#train_left<-train_left[,names(train_left)!=c('basementsqft')] 
+#train_left<-train_left[,names(train_left)!=c('fireplaceflag')]
+train_left<-train_left[,names(train_left)!=c('architecturalstyletypeid')] 
+train_left<-train_left[,names(train_left)!=c('pooltypeid2')] 
+train_left<-train_left[,names(train_left)!=c('texdelinquencyyear')] 
+train_left<-train_left[,names(train_left)!=c('hashottuborspa')] 
+train_left<-train_left[,names(train_left)!=c('yardbuildingsqft17')] 
+train_left<-train_left[,names(train_left)!=c('finishedsquarefeet15')] 
+train_left<-train_left[,names(train_left)!=c('finishedfloor1suqarefeet')] 
+#train_left<-train_left[,names(train_left)!=c('finishedsquarefeet50')] 
+#train_left<-train_left[,names(train_left)!=c('fireplacecnt')] 
+#train_left<-train_left[,names(train_left)!=c('threequarterbathnbr')] 
+train_left<-train_left[,names(train_left)!=c('pooltypeid10')]
+train_left<-train_left[,names(train_left)!=c('poolcnt')] 
+train_left<-train_left[,names(train_left)!=c('numberofstories')] 
+train_left<-train_left[,names(train_left)!=c('airconditioningtypeid')] 
+
+train_left<-train_left[,names(train_left)!=c('garagetotalsqft')] 
+train_left<-train_left[,names(train_left)!=c('regionneighborhood')] 
+
+#train_left<-train_left[,names(train_left)!=c('garagecarcnt')] 
+train_left<-train[,names(train)!=c('calculatedbathnbr')]
+train_left<-train[,names(train)!=c('rawcensustractandblock')]
+train_left<-train[,names(train)!=c('assessmentyear')]
+
+train_left$basementsqft[is.na(train_left$basementsqft)]<-0
+train_left$fireplaceflag[is.na(train_left$fireplaceflag)]<-0
+train_left$threequarterbathnbr[is.na(train_left$threequarterbathnbr)]<-0
+train_left$fireplacecnt[is.na(train_left$fireplacecnt)]<-0
+train_left$garagecarcnt[is.na(train_left$garagecarcnt)]<-0
+
+tax<- data.frame(cbind(train_left$landtaxvaluedollarcnt,train_left$structuretaxvaluedollarcnt,train_left$taxvaluedollarcnt,train_left$taxamount))
+corrplot(cor(tax, use="complete.obs"), type="lower")
+
+train_left<-train[,names(train)!=c('taxamount')]
+#lm.tax<-lm(taxvaluedollarcnt~taxamount,data=train_left)
+#lm.tax
+#summary(lm.tax)
+
+
+sqfeet<- data.frame(cbind(train_left$lotsizesquarefeet,train_left$finishedsquarefeet12,train_left$calculatedfinishedsquarefeet,
+                          train_left$finishedfloor1squarefeet,train_left$finishedsquarefeet50))
+corrplot(cor(sqfeet, use="complete.obs"), type="lower")
+lm.sqfeet<-lm(finishedsquarefeet12~calculatedfinishedsquarefeet,data=train_left)
+lm.sqfeet
+summary(lm.sqfeet)
+train_left<-train[,names(train)!=c('finishedsquarefeet12')]
+train_left$yearbuilt[is.na(train_left$finishedsquarefeet50)]<-mean(train_left$finishedsquarefeet50,na.rm=T)
+
+lm.bb<-lm(fullbathcnt~bathroomcnt,data=train_left)
+lm.bb
+summary(lm.bb)
+train_left$fullbathcnt[is.na(train_left$fullbathcnt)]<-(-0.001002)+0.970993*train_left$bathroomcnt[is.na(train_left$calculatedbathnbr)]
+
+
+train_left$numberofstories[is.na(train_left$numberofstories)]<-1.63
+train_left$unitcnt[is.na(train_left$unitcnt)]<-1.06
+
+#train_left$yearbuilt(which<1920)<-'NA'
+
+
+train_left$yearbuilt[is.na(train_left$yearbuilt)]<-median(train_left$fullbath,na.rm=T)
+
+#train$parcelid[is.na(train$regionidzip)]
+#subset(train_left,parcelid=='14312970')
+
+
+#Dates1<-strptime(as.character(train$transactiondate),"%Y-%m-%d")
+#train_left$month<-as.factor(month(Dates1))
+
+train_left$transactiondate<-as.Date(train$transactiondate,format="%m%d%Y")
+train_left$transactiondate<-as.factor(train_left$transactiondate)
+
+#library(DMwR)
+#train_left_2$bedroomcnt<-knnImputation(train_left$bedroomcnt,meth="weighAvg",scale=T)
+
+train_left$fireplaceflag[is.na(train_left$fireplaceflag)]<-(-1)
+train_left$fireplaceflag[!is.na(train_left$fireplaceflag)]<-1
+
+train_left$propertyzoingdesc<-as.factor(train_left$propertyzoningdesc)
+train_left$propertylandusetypeid<-factor(train$propertylandusetypeid)
+train_left$fips<-factor(train_left$fips)
+train_left$rawcensustractandblock<-factor(train_left$rawcensustractandblock)
+
+gbm.out<-gbm(logerror ~ (basementsqft+ threequarterbathnbr+ fireplacecnt+ garagecarcnt 
+                           +heatingorsystemtypeid+buildingqualitytypeid+unitcnt
+                           +log(lotsizesquarefeet)+ regionidcity+log(finishedsquarefeet50)
+                           + fullbathcnt +yearbuilt+log(calculatedfinishedsquarefeet)+censustractandblock
+                           + log(structuretaxvaluedollarcnt)+ regionidzip+
+                           +log(taxvaluedollarcnt)+bathroomcnt+transactiondate
+                           +bedroomcnt+fips+ propertylandusetypeid+regionidcounty+roomcnt ),
+                         distribution="gaussian",interaction.depth=3,n.trees=3000,shrinkage=0.001,
+                         data=train_left)
+
+
+properties_2016$transactiondate<-"10/1/2016"
+oct2016<-predict.gbm(gbm.out,newdata=properties_2016,n.trees=2000)
+mean((oct2016-train$logerror)^2)
+
+properties_2016$transactiondate<-"11/1/2016"
+nov2016<-predict.gbm(gbm.out,newdata=properties_2016,n.trees=2000)
+
+properties_2016$transactiondate<-"12/1/2016"
+dec2016<-predict.gbm(gbm.out,newdata=properties_2016,n.trees=2000)
+
+properties_2016$transactiondate<-"10/1/2017"
+oct2017<-predict.gbm(gbm.out,newdata=properties_2016,n.trees=2000)
+
+properties_2016$transactiondate<-"11/1/2017"
+nov2017<-predict.gbm(gbm.out,newdata=properties_2016,n.trees=2000)
